@@ -1,0 +1,5 @@
+vgcore.*
+jms_coord
+*_tests
+*.o
+compile_commands.json
