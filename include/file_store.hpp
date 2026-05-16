@@ -4,8 +4,6 @@
 #include <string>
 #include <string_view>
 
-#include "pipe.hpp"
-
 namespace store {
 class Dir {
   std::string root;
@@ -27,8 +25,6 @@ public:
   explicit FileStore(std::string_view root_path);
 
   const std::string &get_root() const { return root_dir.get_root_path(); }
-  psx::Fifo create_fifo(std::string_view name) const;
-  psx::Fifo open_fifo(std::string_view name) const;
   FileStore substore(std::string_view name) const;
 };
 } // namespace store

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstring>
 #include <functional>
 #include <iostream>
@@ -26,6 +28,11 @@ public:
   CreateException(std::string s) : ThreadException(std::move(s)) {}
 };
 
+class DetachException : public ThreadException {
+public:
+  DetachException(std::string s) : ThreadException(std::move(s)) {}
+};
+
 template <typename T> class Thread {
   std::optional<pthread_t> t;
 
@@ -42,9 +49,10 @@ public:
     auto *alloced_f = new std::function<T()>(std::move(f));
 
     pthread_t pthread;
-    if (pthread_create(&pthread, nullptr, start_thread, alloced_f) < 0)
+    int ret;
+    if ((ret = pthread_create(&pthread, nullptr, start_thread, alloced_f)))
       throw CreateException(
-          sutil::concat("failed to create new thread: ", strerror(errno)));
+          sutil::concat("failed to create new thread: ", strerror(ret)));
 
     t = pthread;
   }
@@ -57,23 +65,34 @@ public:
 
   T join() {
     void *res = nullptr;
-    if (pthread_join(*t, &res) < 0)
+    if (pthread_join(*t, &res))
       throw JoinException(sutil::concat("failed to join thread ", *t));
 
     t = -1;
     T *t_res = reinterpret_cast<T *>(res);
-    PTHREAD_CANCELED;
     T t_out = std::move(*t_res);
     delete t_res;
 
     return std::move(t_out);
   }
 
+  void detach() {
+    if (!t)
+      throw DetachException("cannot detach an already moved thread");
+
+    int ret;
+    if ((ret = pthread_detach(*t)))
+      throw DetachException(
+          sutil::concat("failed to detach thread", t, ":", strerror(ret)));
+
+    t = std::nullopt;
+  }
+
   ~Thread() noexcept {
-    if (t)
+    if (!t)
       return;
 
-    if (pthread_cancel(*t) < 0)
+    if (pthread_cancel(*t))
       std::cerr << "WARN: failed to cancel thread " << *t << std::endl;
   }
 };

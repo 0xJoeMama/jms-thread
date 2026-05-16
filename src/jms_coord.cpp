@@ -28,6 +28,13 @@ struct CoordConfig : Command<CoordConfig, Field<Port>, Field<Runpath>,
   static constexpr const char *example = "-p 6767 -l run -n 12";
 };
 
+namespace {
+int run(const CoordConfig &cfg) { 
+  (void) cfg;
+  return 0; 
+}
+} // namespace
+
 int main(int argc, const char **argv) {
   CoordConfig cfg;
   const char *prog_name = *(argv++);
@@ -42,6 +49,8 @@ int main(int argc, const char **argv) {
       cfg.print_usage(prog_name, std::cout);
       return 0;
     }
+
+    return run(cfg);
   } catch (const error::ParsingException &e) {
     if (cfg.get<Help>()) {
       cfg.print_usage(prog_name, std::cout);

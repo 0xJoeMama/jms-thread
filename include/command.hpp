@@ -4,8 +4,6 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "poll.hpp"
-
 namespace jms {
 namespace error {
 class CommandParseError : public std::runtime_error {

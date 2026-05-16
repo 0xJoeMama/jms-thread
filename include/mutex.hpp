@@ -1,6 +1,8 @@
+#pragma once
 #include <algorithm>
 #include <cassert>
 #include <pthread.h>
+#include <utility>
 
 namespace psx {
 template <typename T> class Mutex;
@@ -15,15 +17,24 @@ template <typename T> class Lock {
 
   Lock(const Lock &) = delete;
   Lock &operator=(const Lock &) = delete;
-  Lock &operator=(Lock &&) = delete;
-
   friend class Mutex<T>;
 
 public:
-  Lock(Lock &&other) = default;
+  Lock(Lock &&other) noexcept : mtx(other.mtx), t(other.t) {
+    other.mtx = nullptr;
+    other.t = nullptr;
+  }
+
+  Lock &operator=(Lock &&other) noexcept {
+    if (&other == this)
+      return *this;
+
+    mtx = std::exchange(other.mtx, nullptr);
+    t = std::exchange(other.t, nullptr);
+  }
 
   T &operator*() { return *t; }
-  T &operator->() { return *t; }
+  T *operator->() { return t; }
 
   ~Lock() noexcept {
     if (!mtx)
@@ -42,7 +53,7 @@ public:
     pthread_mutex_init(&mtx, nullptr);
   }
 
-  auto lock() -> Lock<T> { return Lock(&mtx, &t); }
+  Lock<T> lock() { return Lock(&mtx, &t); }
 
   ~Mutex() noexcept { assert(pthread_mutex_destroy(&mtx) >= 0); }
 };
