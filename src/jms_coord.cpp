@@ -1,4 +1,7 @@
 #include "args.hpp"
+#include "socket.hpp"
+#include "thread.hpp"
+#include <variant>
 
 struct Port : RequiredArg<IntArg, Port> {
   static constexpr const char *name = "port";
@@ -12,7 +15,7 @@ struct Runpath : RequiredArg<StringArg, Runpath> {
   static constexpr const char *desc = "Directory to use for coordinator files";
 };
 
-struct WorkerCount : RequiredArg<IntArg, Port> {
+struct WorkerCount : RequiredArg<IntArg, WorkerCount> {
   static constexpr const char *name = "workers";
   static constexpr const char shortname = 'n';
   static constexpr const char *desc = "Maximum number of active workers";
@@ -29,9 +32,30 @@ struct CoordConfig : Command<CoordConfig, Field<Port>, Field<Runpath>,
 };
 
 namespace {
-int run(const CoordConfig &cfg) { 
-  (void) cfg;
-  return 0; 
+class ClientHandler {
+  psx::TcpSocket *sock;
+
+public:
+  ClientHandler(psx::TcpSocket *sock) : sock(sock) {}
+
+  std::monostate operator()() {
+    delete sock;
+    return std::monostate{};
+  }
+};
+
+int run(const CoordConfig &cfg) {
+  auto listener = psx::TcpListener::listen(cfg.get<Port>());
+  std::cout << "INFO: now accepting connections on port " << cfg.get<Port>()
+            << std::endl;
+
+  for (;;) {
+    auto console_sock = new psx::TcpSocket(listener.accept());
+    psx::Thread<std::monostate> client_handler((ClientHandler(console_sock)));
+    client_handler.detach();
+  }
+
+  return 0;
 }
 } // namespace
 

@@ -83,7 +83,7 @@ public:
     int ret;
     if ((ret = pthread_detach(*t)))
       throw DetachException(
-          sutil::concat("failed to detach thread", t, ":", strerror(ret)));
+          sutil::concat("failed to detach thread", *t, ":", strerror(ret)));
 
     t = std::nullopt;
   }

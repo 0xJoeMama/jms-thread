@@ -51,7 +51,7 @@ public:
       throw error::NextCommand();
   }
 
-  virtual psx::Dynamic<std::string> execute(Exec &ex) = 0;
+  virtual std::string execute(Exec &ex) = 0;
   virtual ~Command() {}
 };
 
