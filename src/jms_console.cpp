@@ -111,12 +111,11 @@ int main(int, const char **argv) {
       return 0;
     }
 
-    std::cerr << "ERROR: failed to parse command line: " << e.what()
-              << std::endl;
+    error(sutil::format("failed to parse command line: {}", e.what()));
     cfg.print_usage(*argv, std::cerr);
     return 1;
   } catch (const std::exception &e) {
-    std::cerr << "ERROR: " << e.what() << std::endl;
+    error(e.what());
     return 1;
   }
 }

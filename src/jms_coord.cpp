@@ -37,7 +37,8 @@ struct CoordConfig : Command<CoordConfig, Field<Port>, Field<Runpath>,
 namespace {
 int run(const CoordConfig &cfg) {
   auto listener = psx::TcpListener::listen(cfg.get<Port>());
-  std::cout << "INFO: now accepting connections on port " << cfg.get<Port>()
+  std::cout << sutil::format("INFO: now accepting connections on port {}",
+                             cfg.get<Port>())
             << std::endl;
 
   auto pool = jms::ThreadPool(cfg.get<WorkerCount>());
@@ -54,13 +55,13 @@ int run(const CoordConfig &cfg) {
           res_buf.write("Hello there");
 
           sock->write_buf(std::move(res_buf));
+
+          info(sutil::format("Got message \"{}\" from client", cmd));
         } catch (const psx::SocketException &e) {
-          std::cerr << "ERROR: socket error has been thrown: " << e.what()
-                    << std::endl;
+          error(sutil::format("socket error has been thrown: {}", e.what()));
           break;
         } catch (const std::exception &e) {
-          std::cerr << "ERROR: spurious error has been thrown: " << e.what()
-                    << std::endl;
+          error(sutil::format("spurious error has been thrown: {}", e.what()));
           break;
         }
       }
@@ -95,9 +96,8 @@ int main(int argc, const char **argv) {
       return 0;
     }
 
-    std::cerr << "ERROR: failed to parse command line arguments: " << e.what()
-              << std::endl;
-
+    error(
+        sutil::format("failed to parse command line arguments: {}", e.what()));
     cfg.print_usage(prog_name, std::cerr);
     return 1;
   }

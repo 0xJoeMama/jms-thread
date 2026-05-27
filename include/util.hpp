@@ -44,14 +44,105 @@ std::string concat(const Args &...args) {
   return os.str();
 }
 
+class FormatException : public std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
+template <typename... T>
+constexpr inline void format_inner(std::string_view::const_iterator begin,
+                                   const std::string_view::const_iterator &end,
+                                   std::ostringstream &os, T... rest);
+
+template <>
+constexpr inline void format_inner(std::string_view::const_iterator begin,
+                                   const std::string_view::const_iterator &end,
+                                   std::ostringstream &os) {
+  for (auto it = begin; it != end; it++) {
+    if (*it != '{') {
+      os << *it;
+      continue;
+    }
+
+    it++;
+    if (it == end)
+      throw FormatException("Unclosed bracket '{'");
+
+    switch (*it) {
+    case '{':
+      os << '{';
+      break;
+    case '}':
+      throw FormatException("Not enough format arguments");
+    default:
+      throw FormatException(
+          "Either close the format bracket or escape an opening bracket");
+    }
+  }
+}
+
+template <typename First, typename... T>
+constexpr inline void format_inner(std::string_view::const_iterator begin,
+                                   const std::string_view::const_iterator &end,
+                                   std::ostringstream &os, First first,
+                                   T... rest) {
+  for (auto it = begin; it != end; it++) {
+    if (*it != '{') {
+      os << *it;
+      continue;
+    }
+
+    it++;
+    if (it == end)
+      throw FormatException("Unclosed bracket '{'");
+
+    switch (*it) {
+    case '{':
+      os << '{';
+      break;
+    case '}':
+      os << first;
+      it++;
+      format_inner(it, end, os, rest...);
+      return;
+    default:
+      throw FormatException(
+          "Either close the format bracket or escape an opening bracket");
+    }
+  }
+}
+
+template <typename... T>
+inline std::string format(std::string_view s, T... args) {
+  std::ostringstream os;
+  format_inner<T...>(s.begin(), s.end(), os, args...);
+
+  return os.str();
+}
+
 #ifndef NDEBUG
 #define dbg(x)                                                                 \
   do {                                                                         \
     std::cerr << "dbg: " << __FILE__ << ":" << __LINE__ << ": " << (x)         \
               << std::endl;                                                    \
   } while (0)
+
+#define warn(x)                                                                \
+  do {                                                                         \
+    std::cerr << "WARN: " << (x) << std::endl;                                 \
+  } while (0)
 #else
 #define dbg(x)
+#define warn(x)
 #endif
+
+#define info(x)                                                                \
+  do {                                                                         \
+    std::cout << "INFO: " << (x) << std::endl;                                 \
+  } while (0)
+
+#define error(x)                                                               \
+  do {                                                                         \
+    std::cerr << "ERROR: " << (x) << std::endl;                                \
+  } while (0)
 
 } // namespace sutil

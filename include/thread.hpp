@@ -113,7 +113,7 @@ public:
       return;
 
     if (pthread_cancel(*t))
-      std::cerr << "WARN: failed to cancel thread " << *t << std::endl;
+      warn(sutil::format("failed to cancel thread {}", *t));
   }
 };
 } // namespace psx

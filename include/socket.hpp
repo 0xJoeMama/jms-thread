@@ -101,8 +101,7 @@ public:
 
   ~ReadBuf() noexcept {
     if (cursor < bytes.size())
-      std::cerr << "WARN: read buffer had remaining elements on exit"
-                << std::endl;
+      warn("read buffer had remaining elements on exit");
   }
 
   uint32_t read_int() {
@@ -180,8 +179,8 @@ public:
       OwnedFd fd = socket(AF_INET, SOCK_STREAM, 0);
 
       if (::connect(fd.get_fd(), ai->ai_addr, ai->ai_addrlen) < 0) {
-        std::cerr << "WARN: failed to resolve domain name: " << strerror(errno)
-                  << std::endl;
+        warn(sutil::format("failed to resolve domain name: {}",
+                           strerror(errno)));
         continue;
       }
 
