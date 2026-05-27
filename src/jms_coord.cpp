@@ -1,7 +1,10 @@
+#include <memory>
+#include <variant>
+
 #include "args.hpp"
 #include "socket.hpp"
 #include "thread.hpp"
-#include <variant>
+#include "thread_pool.hpp"
 
 struct Port : RequiredArg<IntArg, Port> {
   static constexpr const char *name = "port";
@@ -32,27 +35,38 @@ struct CoordConfig : Command<CoordConfig, Field<Port>, Field<Runpath>,
 };
 
 namespace {
-class ClientHandler {
-  psx::TcpSocket *sock;
-
-public:
-  ClientHandler(psx::TcpSocket *sock) : sock(sock) {}
-
-  std::monostate operator()() {
-    delete sock;
-    return std::monostate{};
-  }
-};
-
 int run(const CoordConfig &cfg) {
   auto listener = psx::TcpListener::listen(cfg.get<Port>());
   std::cout << "INFO: now accepting connections on port " << cfg.get<Port>()
             << std::endl;
 
+  auto pool = jms::ThreadPool(cfg.get<WorkerCount>());
+
   for (;;) {
-    auto console_sock = new psx::TcpSocket(listener.accept());
-    psx::Thread<std::monostate> client_handler((ClientHandler(console_sock)));
-    client_handler.detach();
+    auto sock = std::make_shared<psx::TcpSocket>(listener.accept());
+    psx::Thread<std::monostate>::start_detached([sock = sock]() {
+      while (1) {
+        try {
+          auto buf = sock->read_buf();
+          auto cmd = buf.read_string();
+
+          psx::WriteBuf res_buf;
+          res_buf.write("Hello there");
+
+          sock->write_buf(std::move(res_buf));
+        } catch (const psx::SocketException &e) {
+          std::cerr << "ERROR: socket error has been thrown: " << e.what()
+                    << std::endl;
+          break;
+        } catch (const std::exception &e) {
+          std::cerr << "ERROR: spurious error has been thrown: " << e.what()
+                    << std::endl;
+          break;
+        }
+      }
+
+      return std::monostate{};
+    });
   }
 
   return 0;

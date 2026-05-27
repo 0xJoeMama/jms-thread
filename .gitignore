@@ -2,4 +2,5 @@ vgcore.*
 jms_coord
 *_tests
 *.o
+*.d
 compile_commands.json

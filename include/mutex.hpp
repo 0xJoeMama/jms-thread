@@ -7,6 +7,8 @@
 namespace psx {
 template <typename T> class Mutex;
 
+class Condition;
+
 template <typename T> class Lock {
   pthread_mutex_t *mtx;
   T *t;
@@ -18,6 +20,7 @@ template <typename T> class Lock {
   Lock(const Lock &) = delete;
   Lock &operator=(const Lock &) = delete;
   friend class Mutex<T>;
+  friend class Condition;
 
 public:
   Lock(Lock &&other) noexcept : mtx(other.mtx), t(other.t) {

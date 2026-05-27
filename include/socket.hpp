@@ -10,13 +10,17 @@
 #include "util.hpp"
 
 namespace psx {
-class SocketException {
+class SocketException : public std::exception {
   std::string msg;
 
 public:
   SocketException(std::string what) : msg(std::move(what)) {}
+  const char *what() const noexcept override { return msg.data(); }
+};
 
-  const char *what() const noexcept { return msg.data(); }
+class SockEof : public SocketException {
+public:
+  SockEof() : SocketException("Reached End of File") {}
 };
 
 class OwnedFd {
@@ -45,7 +49,7 @@ public:
   int get_fd() const { return fd; }
 };
 
-class PacketBuf {
+class WriteBuf {
   std::vector<uint8_t> bytes;
 
   void write_buffer(const void *v, size_t len) {
@@ -55,17 +59,15 @@ class PacketBuf {
   }
 
 public:
-  PacketBuf() {}
-  PacketBuf(const PacketBuf &) = delete;
-  PacketBuf(std::vector<uint8_t> bytes) noexcept : bytes(std::move(bytes)) {}
+  WriteBuf() {}
+  WriteBuf(const WriteBuf &) = delete;
+  WriteBuf(WriteBuf &&) = default;
 
   size_t size() const { return bytes.size(); }
 
-  template <typename T> void write(const T &t);
-
   void write(const uint32_t &i) {
     uint32_t neti = htonl(i);
-    write_buffer(&i, sizeof(neti));
+    write_buffer(&neti, sizeof(neti));
   }
 
   void write(const std::string &s) {
@@ -77,6 +79,45 @@ public:
 
   const void *byte_buf() const {
     return reinterpret_cast<const void *>(bytes.data());
+  }
+};
+
+class ReadBuf {
+  std::vector<uint8_t> bytes;
+  size_t cursor;
+
+  void read_buffer(void *v, size_t len) {
+    if (cursor + len > bytes.size())
+      throw SocketException("Buffer overflow");
+
+    memcpy(v, bytes.data() + cursor, len);
+    cursor += len;
+  }
+
+public:
+  ReadBuf(const ReadBuf &) = delete;
+  ReadBuf(std::vector<uint8_t> bytes) noexcept
+      : bytes(std::move(bytes)), cursor(0) {}
+
+  ~ReadBuf() noexcept {
+    if (cursor < bytes.size())
+      std::cerr << "WARN: read buffer had remaining elements on exit"
+                << std::endl;
+  }
+
+  uint32_t read_int() {
+    uint32_t i;
+    read_buffer(&i, sizeof(i));
+    i = ntohl(i);
+
+    return i;
+  }
+
+  std::string read_string() {
+    uint32_t len = read_int();
+    std::string s(len, 0);
+    read_buffer(s.data(), len);
+    return s;
   }
 };
 
@@ -107,6 +148,9 @@ class TcpSocket {
         throw SocketException(
             sutil::concat("failed to write data to socket:", strerror(errno)));
 
+      if (readed == 0)
+        throw SockEof();
+
       total_read += readed;
     }
   }
@@ -123,37 +167,43 @@ public:
     hint.ai_socktype = SOCK_STREAM;
     int res;
 
-    port = htons(port);
+    std::string port_s = std::to_string(port);
 
-    if ((res = getaddrinfo(ip_addr.data(), reinterpret_cast<char *>(&port),
-                           &hint, &info)) < 0)
+    std::cout << "INFO: connecting to " << ip_addr << ":" << port_s
+              << std::endl;
+
+    if ((res = getaddrinfo(ip_addr.data(), port_s.c_str(), &hint, &info)) < 0)
       throw SocketException(sutil::concat("failed to resolve socket address",
                                           ip_addr, ":", gai_strerror(res)));
 
     for (addrinfo *ai = info; ai; ai = ai->ai_next) {
       OwnedFd fd = socket(AF_INET, SOCK_STREAM, 0);
 
-      if (::connect(fd.get_fd(), ai->ai_addr, ai->ai_addrlen) < 0)
-        throw SocketException(
-            sutil::concat("failed to connect to TCP endpoint at", ip_addr,
-                          "(port", port, "):", strerror(errno)));
+      if (::connect(fd.get_fd(), ai->ai_addr, ai->ai_addrlen) < 0) {
+        std::cerr << "WARN: failed to resolve domain name: " << strerror(errno)
+                  << std::endl;
+        continue;
+      }
 
+      freeaddrinfo(info);
       return TcpSocket(std::move(fd));
     }
 
+    freeaddrinfo(info);
+
     throw SocketException(sutil::concat(
         "failed to find appropriate connection address for TCP socket:",
-        ip_addr, ":", ntohs(port)));
+        ip_addr, ":", port_s));
   }
 
-  void write_buf(PacketBuf buf) {
+  void write_buf(WriteBuf buf) {
     size_t len = buf.size();
     const void *data = buf.byte_buf();
     write_all(&len, sizeof(len));
     write_all(data, len);
   }
 
-  PacketBuf read_buf() {
+  ReadBuf read_buf() {
     size_t len;
     std::vector<uint8_t> bytes;
 
@@ -161,7 +211,7 @@ public:
     bytes.resize(len);
     read_all(bytes.data(), len);
 
-    return PacketBuf(std::move(bytes));
+    return ReadBuf(std::move(bytes));
   }
 };
 
@@ -200,9 +250,13 @@ class TcpListener {
 
 public:
   static TcpListener listen(short port, int n = 128) {
-    port = htons(port);
-
     OwnedFd fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    int opt = 1;
+    if (::setsockopt(fd.get_fd(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
+        0)
+      throw SocketException(sutil::concat("failed to set REUSEADDR for socket:",
+                                          strerror(errno)));
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;

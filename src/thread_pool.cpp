@@ -1,6 +1,7 @@
-#include "thread_pool.hpp"
-#include "condition.hpp"
 #include <algorithm>
+
+#include "condition.hpp"
+#include "thread_pool.hpp"
 
 using namespace jms;
 using namespace psx;
@@ -12,8 +13,8 @@ auto make_threads(psx::Mutex<deque<function<ThreadResult()>>> &tasks,
   std::vector<Thread<monostate>> res{};
   res.reserve(nthreads);
 
-  generate_n(back_inserter(res), nthreads, [&tasks, &new_task](const auto) {
-    return [&]() {
+  generate_n(back_inserter(res), nthreads, [&tasks, &new_task]() {
+    return Thread<monostate>([&]() {
       ThreadResult res;
 
       do {
@@ -27,7 +28,7 @@ auto make_threads(psx::Mutex<deque<function<ThreadResult()>>> &tasks,
       } while (res != ThreadResult::Break);
 
       return monostate{};
-    };
+    });
   });
 
   return res;
@@ -35,12 +36,13 @@ auto make_threads(psx::Mutex<deque<function<ThreadResult()>>> &tasks,
 } // namespace
 
 ThreadPool::ThreadPool(size_t nthreads)
-    : tasks{}, new_task{}, threads(make_threads(tasks, new_task, nthreads)) {}
+    : tasks{}, tasks_changed{},
+      threads(make_threads(tasks, tasks_changed, nthreads)) {}
 
 void ThreadPool::enqueue(std::function<ThreadResult()> job) {
   auto lock = tasks.lock();
   lock->emplace_back(std::move(job));
-  new_task.signal();
+  tasks_changed.signal();
 }
 
 void ThreadPool::shutdown() {

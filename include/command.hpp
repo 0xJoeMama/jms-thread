@@ -4,6 +4,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "util.hpp"
+
 namespace jms {
 namespace error {
 class CommandParseError : public std::runtime_error {
@@ -60,7 +62,7 @@ protected:
   size_t job_id;
 
 public:
-  JobIdCommand(std::string name, PeekableStream &peek)
+  JobIdCommand(std::string_view name, PeekableStream &peek)
       : Command<Exec>(name, peek) {
     if (peek.stream().eof())
       throw error::CommandParseError("expected job_id argument");

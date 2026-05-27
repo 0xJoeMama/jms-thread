@@ -43,4 +43,15 @@ std::string concat(const Args &...args) {
       ...);
   return os.str();
 }
+
+#ifndef NDEBUG
+#define dbg(x)                                                                 \
+  do {                                                                         \
+    std::cerr << "dbg: " << __FILE__ << ":" << __LINE__ << ": " << (x)         \
+              << std::endl;                                                    \
+  } while (0)
+#else
+#define dbg(x)
+#endif
+
 } // namespace sutil

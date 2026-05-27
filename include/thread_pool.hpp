@@ -15,7 +15,7 @@ enum class ThreadResult {
 
 class ThreadPool {
   psx::Mutex<std::deque<std::function<ThreadResult()>>> tasks;
-  psx::Condition new_task;
+  psx::Condition tasks_changed;
   std::vector<psx::Thread<std::monostate>> threads;
 
 public:

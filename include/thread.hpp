@@ -37,11 +37,28 @@ template <typename T> class Thread {
   std::optional<pthread_t> t;
 
   static void *start_thread(void *arg) {
+    void *res = nullptr;
     auto *alloced_f = reinterpret_cast<std::function<T()> *>(arg);
-    auto *res = new T(std::move((*alloced_f)()));
-    delete alloced_f;
 
+    try {
+      res = new T(std::move((*alloced_f)()));
+    } catch (...) {
+    }
+
+    delete alloced_f;
     return res;
+  }
+
+  static void *start_detached_thread(void *arg) {
+    auto *alloced_f = reinterpret_cast<std::function<T()> *>(arg);
+
+    try {
+      (*alloced_f)();
+    } catch (...) {
+    }
+
+    delete alloced_f;
+    return nullptr;
   }
 
 public:
@@ -57,35 +74,38 @@ public:
     t = pthread;
   }
 
+  static void start_detached(std::function<T()> f) {
+    auto *alloced_f = new std::function<T()>(std::move(f));
+
+    pthread_t pthread;
+    int ret;
+    if ((ret = pthread_create(&pthread, nullptr, start_detached_thread,
+                              alloced_f)))
+      throw CreateException(
+          sutil::concat("failed to create new thread: ", strerror(ret)));
+
+    if (pthread_detach(pthread) < 0) {
+      pthread_cancel(pthread);
+      throw DetachException("failed to detach created thread");
+    }
+  }
+
   Thread(const Thread &) = delete;
-  Thread(Thread &&other) noexcept : t(other.t) { other.t = -1; }
+  Thread(Thread &&other) noexcept : t(std::nullopt) { other.t.swap(t); }
 
   Thread &operator=(const Thread &) = delete;
-  Thread &operator=(Thread &&) = delete;
 
   T join() {
     void *res = nullptr;
     if (pthread_join(*t, &res))
       throw JoinException(sutil::concat("failed to join thread ", *t));
 
-    t = -1;
+    t = std::nullopt;
     T *t_res = reinterpret_cast<T *>(res);
     T t_out = std::move(*t_res);
     delete t_res;
 
     return std::move(t_out);
-  }
-
-  void detach() {
-    if (!t)
-      throw DetachException("cannot detach an already moved thread");
-
-    int ret;
-    if ((ret = pthread_detach(*t)))
-      throw DetachException(
-          sutil::concat("failed to detach thread", *t, ":", strerror(ret)));
-
-    t = std::nullopt;
   }
 
   ~Thread() noexcept {

@@ -5,22 +5,18 @@
 #include <unistd.h>
 
 #include "args.hpp"
-#include "async_ops.hpp"
-#include "pipe.hpp"
-#include "poll.hpp"
-#include "signals.hpp"
+#include "socket.hpp"
 
-struct Hostname : RequiredArg<StringArg, WritePath> {
+struct Hostname : RequiredArg<StringArg, Hostname> {
   static constexpr const char *name = "host";
   static constexpr const char shortname = 'h';
   static constexpr const char *desc = "IP address for the coordinator servef";
 };
 
-struct Port : RequiredArg<IntArg, ReadPath> {
+struct Port : RequiredArg<IntArg, Port> {
   static constexpr const char *name = "port";
   static constexpr const char shortname = 'p';
-  static constexpr const char *desc =
-      "TCP port for the coordinator server";
+  static constexpr const char *desc = "TCP port for the coordinator server";
 };
 
 struct OpFile : NamedArg<StringArg, OpFile> {
@@ -34,17 +30,20 @@ struct ConsoleConfig : Command<ConsoleConfig, Field<Hostname>, Field<Port>,
   static constexpr const char *desc = "Job Management System Console";
   static constexpr const char *signature =
       "-h <hostname> -p <port> (-o <operations-file>)";
-  static constexpr const char *example = "-h localhost -p 6767 -o inputs/simple.txt";
+  static constexpr const char *example =
+      "-h localhost -p 6767 -o inputs/simple.txt";
 };
 
 namespace {
-bool handle_command(psx::DuplexConnection &conn, const std::string &op) {
-  psx::await(jms::WriteString(op, conn.w));
+bool handle_command(psx::TcpSocket &sock, const std::string &op) {
+  psx::WriteBuf buf;
+  buf.write(op);
 
-  auto response = psx::await(jms::ReadString(conn.r));
-  std::cout << response << std::endl;
+  sock.write_buf(std::move(buf));
 
-  return response.find("Served") != 0;
+  auto rbuf = sock.read_buf();
+  std::cout << rbuf.read_string() << std::endl;
+  return true;
 }
 
 std::ostream &print_prompt(size_t &line) {
@@ -55,7 +54,7 @@ std::ostream &print_prompt(size_t &line) {
   }
 }
 
-void send_operations(std::string &path, psx::DuplexConnection &conn,
+void send_operations(const std::string &path, psx::TcpSocket &sock,
                      size_t &command_cnt) {
   std::cout << "Operation file " << path << " was provided. Sending..."
             << std::endl;
@@ -67,28 +66,25 @@ void send_operations(std::string &path, psx::DuplexConnection &conn,
       continue;
 
     print_prompt(command_cnt) << op << std::endl;
-    handle_command(conn, op);
+    handle_command(sock, op);
   }
 }
 
 void run(ConsoleConfig cfg) {
-  auto r = psx::Fifo(cfg.get<ReadPath>(), true).into_read();
-  auto w = psx::Fifo(cfg.get<WritePath>(), true).into_write();
-
-  psx::DuplexConnection conn(std::move(r), std::move(w));
-  std::string ops(cfg.get<OpFile>());
+  psx::TcpSocket sock = psx::TcpSocket::connect(
+      std::string(cfg.get<Hostname>()), cfg.get<Port>());
 
   size_t command_cnt = 0;
-  if (!ops.empty())
-    send_operations(ops, conn, command_cnt);
+
+  if (!cfg.get<OpFile>().empty())
+    send_operations(std::string(cfg.get<OpFile>()), sock, command_cnt);
 
   std::string op{};
-
   std::cin.exceptions(std::ios_base::badbit);
 
   while (print_prompt(command_cnt), std::getline(std::cin, op))
     if (!op.empty())
-      if (!handle_command(conn, op))
+      if (!handle_command(sock, op))
         break;
 
   std::cout << "EOF given. Terminating..." << std::endl;
@@ -107,7 +103,6 @@ int main(int, const char **argv) {
       return 0;
     }
 
-    jms::signals::block_unwanted();
     run(std::move(cfg));
     return 0;
   } catch (const error::ParsingException &e) {
