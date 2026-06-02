@@ -24,4 +24,3 @@ clean:
 	rm -rf $(BINS) $(TESTS) *.o *.d
 
 -include *.d
-
