@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -19,6 +20,8 @@ template <typename... Ts> struct Match : Ts... {
 };
 
 template <typename... Ts> Match(Ts...) -> Match<Ts...>;
+
+template <typename T> void drop(T &&) {}
 
 namespace sutil {
 template <typename I> std::string concat_iter(const I &v) {
@@ -118,6 +121,7 @@ inline std::string format(std::string_view s, T... args) {
 
   return os.str();
 }
+} // namespace sutil
 
 #ifndef NDEBUG
 #define dbg(x)                                                                 \
@@ -144,5 +148,3 @@ inline std::string format(std::string_view s, T... args) {
   do {                                                                         \
     std::cerr << "ERROR: " << (x) << std::endl;                                \
   } while (0)
-
-} // namespace sutil

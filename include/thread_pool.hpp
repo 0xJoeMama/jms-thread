@@ -21,7 +21,10 @@ class ThreadPool {
 public:
   ThreadPool(size_t nthreads);
 
-  void enqueue(std::function<ThreadResult()> job);
-  void shutdown();
+  void enqueue(std::function<ThreadResult()> job) noexcept;
+  void shutdown() noexcept;
+  void join() noexcept;
+
+  size_t queue_size() { return tasks.lock()->size(); }
 };
 } // namespace jms

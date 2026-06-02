@@ -1,10 +1,13 @@
 #pragma once
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <string>
 #include <string_view>
 
-namespace store {
+#include "fd.hpp"
+
+namespace jms {
 class Dir {
   std::string root;
 
@@ -26,5 +29,7 @@ public:
 
   const std::string &get_root() const { return root_dir.get_root_path(); }
   FileStore substore(std::string_view name) const;
+
+  psx::OwnedFd touch(std::string_view path, int options = O_RDWR);
 };
-} // namespace store
+} // namespace jms

@@ -2,7 +2,6 @@
 
 #include <cstring>
 #include <functional>
-#include <iostream>
 #include <optional>
 #include <pthread.h>
 #include <string>

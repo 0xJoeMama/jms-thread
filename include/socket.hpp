@@ -1,12 +1,12 @@
 #include <arpa/inet.h>
 #include <cstring>
-#include <iostream>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <vector>
 
+#include "fd.hpp"
 #include "util.hpp"
 
 namespace psx {
@@ -23,30 +23,12 @@ public:
   SockEof() : SocketException("Reached End of File") {}
 };
 
-class OwnedFd {
-  int fd;
-
+class SocketCreationException : public ErrnoException {
 public:
-  OwnedFd(int fd) : fd(fd) {
-    if (fd < 0)
-      throw SocketException(
-          sutil::concat("invalid file descriptor:", strerror(errno)));
-  }
+  using ErrnoException::ErrnoException;
 
-  OwnedFd(OwnedFd &&fd) noexcept : fd(fd.fd) { fd.fd = -1; }
-
-  ~OwnedFd() noexcept {
-    if (fd < 0)
-      return;
-
-    if (close(fd) < 0)
-      std::cerr << strerror(errno) << std::endl;
-  }
-
-  OwnedFd &operator=(const OwnedFd &) = delete;
-  OwnedFd &operator=(OwnedFd &&) = delete;
-
-  int get_fd() const { return fd; }
+  SocketCreationException(const ErrnoException &e)
+      : SocketCreationException(e.get_errnum()) {}
 };
 
 class WriteBuf {
@@ -70,7 +52,7 @@ public:
     write_buffer(&neti, sizeof(neti));
   }
 
-  void write(const std::string &s) {
+  void write(std::string_view s) {
     // TODO: this limits maximum string size of 4 GB which I doubt we will ever
     // go over
     write(static_cast<uint32_t>(s.size()));
@@ -168,15 +150,13 @@ public:
 
     std::string port_s = std::to_string(port);
 
-    std::cout << "INFO: connecting to " << ip_addr << ":" << port_s
-              << std::endl;
-
+    dbg(sutil::format("connecting to {}:{}", ip_addr, port_s));
     if ((res = getaddrinfo(ip_addr.data(), port_s.c_str(), &hint, &info)) < 0)
       throw SocketException(sutil::concat("failed to resolve socket address",
                                           ip_addr, ":", gai_strerror(res)));
 
     for (addrinfo *ai = info; ai; ai = ai->ai_next) {
-      OwnedFd fd = socket(AF_INET, SOCK_STREAM, 0);
+      OwnedFd fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
       if (::connect(fd.get_fd(), ai->ai_addr, ai->ai_addrlen) < 0) {
         warn(sutil::format("failed to resolve domain name: {}",
@@ -190,9 +170,9 @@ public:
 
     freeaddrinfo(info);
 
-    throw SocketException(sutil::concat(
-        "failed to find appropriate connection address for TCP socket:",
-        ip_addr, ":", port_s));
+    throw SocketException(sutil::format(
+        "failed to find appropriate connection address for TCP socket: {}:{}",
+        ip_addr, port_s));
   }
 
   void write_buf(WriteBuf buf) {
@@ -200,6 +180,12 @@ public:
     const void *data = buf.byte_buf();
     write_all(&len, sizeof(len));
     write_all(data, len);
+  }
+
+  void write_string(std::string_view s) {
+    WriteBuf buf;
+    buf.write(s);
+    write_buf(std::move(buf));
   }
 
   ReadBuf read_buf() {
@@ -249,7 +235,7 @@ class TcpListener {
 
 public:
   static TcpListener listen(short port, int n = 128) {
-    OwnedFd fd = socket(AF_INET, SOCK_STREAM, 0);
+    OwnedFd fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
     int opt = 1;
     if (::setsockopt(fd.get_fd(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
@@ -276,7 +262,11 @@ public:
   }
 
   TcpSocket accept() {
-    return TcpSocket(OwnedFd(::accept(fd.get_fd(), nullptr, nullptr)));
+    try {
+      return TcpSocket(OwnedFd(::accept4(fd.get_fd(), nullptr, nullptr, SOCK_CLOEXEC)));
+    } catch (const ErrnoException &e) {
+      throw SocketCreationException(e);
+    }
   }
 };
 } // namespace psx

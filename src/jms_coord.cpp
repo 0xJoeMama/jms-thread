@@ -2,6 +2,11 @@
 #include <variant>
 
 #include "args.hpp"
+#include "command.hpp"
+#include "coord_commands.hpp"
+#include "file_store.hpp"
+#include "job.hpp"
+#include "mutex.hpp"
 #include "socket.hpp"
 #include "thread.hpp"
 #include "thread_pool.hpp"
@@ -18,7 +23,7 @@ struct Runpath : RequiredArg<StringArg, Runpath> {
   static constexpr const char *desc = "Directory to use for coordinator files";
 };
 
-struct WorkerCount : RequiredArg<IntArg, WorkerCount> {
+struct WorkerCount : RequiredArg<PositiveIntArg, WorkerCount> {
   static constexpr const char *name = "workers";
   static constexpr const char shortname = 'n';
   static constexpr const char *desc = "Maximum number of active workers";
@@ -34,41 +39,83 @@ struct CoordConfig : Command<CoordConfig, Field<Port>, Field<Runpath>,
   static constexpr const char *example = "-p 6767 -l run -n 12";
 };
 
+using namespace jms;
+
 namespace {
+void nothing_handler(int) {
+}
+
 int run(const CoordConfig &cfg) {
   auto listener = psx::TcpListener::listen(cfg.get<Port>());
   std::cout << sutil::format("INFO: now accepting connections on port {}",
                              cfg.get<Port>())
             << std::endl;
 
-  auto pool = jms::ThreadPool(cfg.get<WorkerCount>());
+  sigset_t blocked;
+  sigemptyset(&blocked);
+  sigaddset(&blocked, SIGALRM);
+  sigset_t old;
 
-  for (;;) {
-    auto sock = std::make_shared<psx::TcpSocket>(listener.accept());
-    psx::Thread<std::monostate>::start_detached([sock = sock]() {
-      while (1) {
-        try {
-          auto buf = sock->read_buf();
-          auto cmd = buf.read_string();
+  sigprocmask(SIG_BLOCK, &blocked, &old);
+  ThreadPool pool(cfg.get<WorkerCount>());
+  sigprocmask(SIG_UNBLOCK, &blocked, &old);
 
-          psx::WriteBuf res_buf;
-          res_buf.write("Hello there");
+  struct sigaction sa{};
+  sa.sa_handler = nothing_handler;
+  sa.sa_flags = SA_INTERRUPT;
+  sigaction(SIGALRM, &sa, nullptr);
 
-          sock->write_buf(std::move(res_buf));
+  psx::Mutex<bool> shutting_down = false;
+  psx::Mutex<std::vector<Job>> jobs;
+  FileStore store(cfg.get<Runpath>());
 
-          info(sutil::format("Got message \"{}\" from client", cmd));
-        } catch (const psx::SocketException &e) {
-          error(sutil::format("socket error has been thrown: {}", e.what()));
-          break;
-        } catch (const std::exception &e) {
-          error(sutil::format("spurious error has been thrown: {}", e.what()));
-          break;
+  while (!*shutting_down.lock()) {
+    try {
+      auto sock = std::make_shared<psx::TcpSocket>(listener.accept());
+
+      psx::Thread<std::monostate>::start_detached([sock = sock, &pool,
+                                                   &shutting_down, &jobs,
+                                                   &store] {
+        CoordView view(shutting_down, jobs, pool, store);
+        while (!*shutting_down.lock()) {
+          try {
+            auto buf = sock->read_buf();
+            auto cmd_str = buf.read_string();
+
+            auto cmd =
+                parse_command<CoordView, Submit, Status, StatusAll, ShowActive,
+                              ShowFinished, ShowWorkers, Shutdown>(
+                    std::move(cmd_str));
+
+            auto response = cmd->execute(view);
+            sock->write_string(response);
+          } catch (const jms::error::CommandParseError &e) {
+            psx::WriteBuf res_buf;
+            res_buf.write(e.what());
+            sock->write_buf(std::move(res_buf));
+          } catch (const psx::SocketException &e) {
+            error(sutil::format("socket error has been thrown: {}", e.what()));
+            break;
+          } catch (const std::exception &e) {
+            error(
+                sutil::format("spurious error has been thrown: {}", e.what()));
+            break;
+          }
         }
-      }
 
-      return std::monostate{};
-    });
+        return std::monostate{};
+      });
+    } catch (const psx::SocketCreationException &e) {
+      if (e.get_errnum() != EINTR) {
+        error(sutil::format("could not establish socket connection: {}",
+                            e.what()));
+        break;
+      }
+    }
   }
+
+  pool.shutdown();
+  pool.join();
 
   return 0;
 }
@@ -90,7 +137,7 @@ int main(int argc, const char **argv) {
     }
 
     return run(cfg);
-  } catch (const error::ParsingException &e) {
+  } catch (const ::error::ParsingException &e) {
     if (cfg.get<Help>()) {
       cfg.print_usage(prog_name, std::cout);
       return 0;

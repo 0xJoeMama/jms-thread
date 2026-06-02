@@ -11,13 +11,14 @@
 namespace jms {
 enum class JobStatus {
   Queued,
-  Running,
+  Active,
   Finished,
 };
 
 using JobId = size_t;
 
 namespace chr = std::chrono;
+using Timepoint = chr::time_point<std::chrono::system_clock>;
 
 class Job {
 protected:
@@ -28,13 +29,13 @@ protected:
   JobStatus status;
 
 public:
-  Job(JobId id) noexcept;
+  Job(JobId id, std::vector<std::string> cmd) noexcept;
   Job(const Job &) noexcept = delete;
   Job(Job &&) noexcept = default;
   virtual ~Job() = default;
 
   Job &operator=(const Job &) = delete;
-  Job &operator=(Job &&);
+  Job &operator=(Job &&) = delete;
 
   JobStatus get_status() const { return status; }
   auto get_id() const { return id; }
@@ -42,7 +43,9 @@ public:
   auto get_start_time() const { return start; }
   auto get_cmd() const { return cmd; }
 
-  pid_t launch(const store::FileStore &store);
+  pid_t launch(const jms::FileStore &store);
   void finished();
+
+  bool operator<(const Timepoint &t) const { return submission_time < t; }
 };
 } // namespace jms

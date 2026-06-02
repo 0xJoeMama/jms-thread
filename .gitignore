@@ -4,3 +4,5 @@ jms_coord
 *.o
 *.d
 compile_commands.json
+run
+jms_console

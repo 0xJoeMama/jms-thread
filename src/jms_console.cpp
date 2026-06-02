@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <unistd.h>
 
 #include "args.hpp"
@@ -43,7 +44,16 @@ bool handle_command(psx::TcpSocket &sock, const std::string &op) {
 
   auto rbuf = sock.read_buf();
   std::cout << rbuf.read_string() << std::endl;
-  return true;
+
+  std::istringstream is{op};
+  std::string out;
+  is >> out;
+  if (out != "shutdown")
+    return true;
+
+  is >> out;
+
+  return !is.eof();
 }
 
 std::ostream &print_prompt(size_t &line) {
@@ -85,7 +95,7 @@ void run(ConsoleConfig cfg) {
   while (print_prompt(command_cnt), std::getline(std::cin, op))
     if (!op.empty())
       if (!handle_command(sock, op))
-        break;
+        return;
 
   std::cout << "EOF given. Terminating..." << std::endl;
 }
