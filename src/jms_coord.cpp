@@ -1,3 +1,4 @@
+#include <csignal>
 #include <memory>
 #include <variant>
 
@@ -49,10 +50,14 @@ inline int run(const CoordConfig &cfg) {
   sigset_t blocked;
   sigemptyset(&blocked);
   sigaddset(&blocked, SIGTERM);
+  // ignore SIGPIPE
+  sigaddset(&blocked, SIGPIPE);
 
   // only the main thread shall receive SIGTERM
   sigprocmask(SIG_BLOCK, &blocked, nullptr);
   ThreadPool pool(cfg.get<WorkerCount>());
+
+  sigdelset(&blocked, SIGPIPE);
   sigprocmask(SIG_UNBLOCK, &blocked, nullptr);
 
   // do nothing on SIGTERM, just interrupt syscalls
@@ -75,7 +80,7 @@ inline int run(const CoordConfig &cfg) {
             // read client command
             auto buf = sock->read_buf();
             auto cmd_str = buf.read_string();
-            dbg(sutil::format("Received command {}", cmd_str));
+            dbg(sutil::format("Received command '{}'", cmd_str));
 
             // parse it
             auto cmd =
