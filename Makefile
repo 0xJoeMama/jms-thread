@@ -12,13 +12,16 @@ vpath %.hpp include/
 all: $(BINS)
 debug: CXXFLAGS += -UNDEBUG -g3
 debug: all
+test: $(TESTS)
+
+.PHONY: clean all debug test
 
 jms_coord: jms_coord.o thread_pool.o coord_commands.o job.o file_store.o
 jms_console: jms_console.o
 thread_pool_tests: thread_pool.o
-test: $(TESTS)
 
 clean:
 	rm -rf $(BINS) $(TESTS) *.o *.d
 
 -include *.d
+
