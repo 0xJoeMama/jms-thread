@@ -17,6 +17,6 @@ thread_pool_tests: thread_pool.o
 test: $(TESTS)
 
 clean:
-	rm -rf $(BINS) *.o *.d
+	rm -rf $(BINS) $(TESTS) *.o *.d
 
 -include *.d

@@ -4,8 +4,6 @@
 #include "args.hpp"
 #include "command.hpp"
 #include "coord_commands.hpp"
-#include "file_store.hpp"
-#include "job.hpp"
 #include "mutex.hpp"
 #include "socket.hpp"
 #include "thread.hpp"
@@ -42,8 +40,7 @@ struct CoordConfig : Command<CoordConfig, Field<Port>, Field<Runpath>,
 using namespace jms;
 
 namespace {
-void nothing_handler(int) {
-}
+void nothing_handler(int) {}
 
 int run(const CoordConfig &cfg) {
   auto listener = psx::TcpListener::listen(cfg.get<Port>());
@@ -65,19 +62,14 @@ int run(const CoordConfig &cfg) {
   sa.sa_flags = SA_INTERRUPT;
   sigaction(SIGALRM, &sa, nullptr);
 
-  psx::Mutex<bool> shutting_down = false;
-  psx::Mutex<std::vector<Job>> jobs;
-  FileStore store(cfg.get<Runpath>());
+  CoordView view(pool, cfg.get<Runpath>());
 
-  while (!*shutting_down.lock()) {
+  while (!*view.shutdown_flag().lock()) {
     try {
       auto sock = std::make_shared<psx::TcpSocket>(listener.accept());
 
-      psx::Thread<std::monostate>::start_detached([sock = sock, &pool,
-                                                   &shutting_down, &jobs,
-                                                   &store] {
-        CoordView view(shutting_down, jobs, pool, store);
-        while (!*shutting_down.lock()) {
+      psx::Thread<std::monostate>::start_detached([sock = sock, &view] {
+        while (!*view.shutdown_flag().lock()) {
           try {
             auto buf = sock->read_buf();
             auto cmd_str = buf.read_string();

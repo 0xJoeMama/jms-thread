@@ -46,7 +46,7 @@ struct Fts {
 
 class AlreadyThere {};
 
-DIR *mk_open_dir(const char *path) {
+void mk_open_dir(const char *path) {
   DIR *dir = opendir(path);
   if (dir) {
     closedir(dir);
@@ -65,7 +65,7 @@ DIR *mk_open_dir(const char *path) {
   if (!dir)
     throw psx::ErrnoException("failed to open directory");
 
-  return dir;
+  closedir(dir);
 }
 } // namespace
 

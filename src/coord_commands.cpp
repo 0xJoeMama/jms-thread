@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <chrono>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <sys/wait.h>
 
@@ -45,9 +47,15 @@ std::string Submit::execute(CoordView &view) {
 
   view.get_worker_pool().enqueue([job_id = new_id, &jobs = view.get_job_list(),
                                   &store = view.get_store(),
-                                  &shutting_down = view.shutdown_flag()] {
+                                  &shutting_down = view.shutdown_flag(),
+                                  &stats = view.get_worker_stats()](size_t ti) {
     if (*shutting_down.lock())
       return ThreadResult::Break;
+
+    {
+      auto stat = stats.at(ti).lock();
+      stat->job_started(job_id);
+    }
 
     pid_t job_pid = -1;
     {
@@ -69,6 +77,11 @@ std::string Submit::execute(CoordView &view) {
       auto lock = jobs.lock();
       auto &job = lock->at(job_id);
       job.finished();
+    }
+
+    {
+      auto stat = stats.at(ti).lock();
+      stat->job_finished();
     }
 
     return ThreadResult::Continue;
@@ -128,7 +141,28 @@ std::string ShowFinished::execute(CoordView &view) {
   return os.str();
 }
 
-std::string ShowWorkers::execute(CoordView &) { todo("not implemented"); }
+std::string ShowWorkers::execute(CoordView &view) {
+  std::ostringstream os{};
+  os << "Worker TID,\tStatus,\tServed:" << std::endl;
+
+  for (size_t i = 0; i < view.get_worker_pool().nthreads(); i++) {
+    auto stats = view.get_worker_stats().at(i).lock();
+    auto tid = view.get_worker_pool().thread_id(i);
+
+    os << "0x" << std::setbase(16) << tid << std::setbase(10) << "\t";
+    auto curr = stats->get_current_job();
+
+    if (curr) {
+      os << "running JobID " << *curr;
+    } else {
+      os << "idle";
+    }
+
+    os << "\tserved " << stats->get_finished_jobs() << std::endl;
+  }
+
+  return os.str();
+}
 
 // imposed lock order is:
 // job metadata lock -> shutting_down lock -> thread pool internal lock

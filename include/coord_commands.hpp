@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <optional>
 #include <signal.h>
 #include <vector>
 
@@ -12,17 +13,33 @@
 #include "thread_pool.hpp"
 
 namespace jms {
-class CoordView {
-  psx::Mutex<bool> &shutting_down;
-  psx::Mutex<std::vector<Job>> &jobs;
-  ThreadPool &workers;
-  const FileStore &store;
+class WorkerStats {
+  size_t finished_jobs;
+  std::optional<JobId> current_job;
 
 public:
-  CoordView(psx::Mutex<bool> &shutting_down, psx::Mutex<std::vector<Job>> &jobs,
-            ThreadPool &workers, const FileStore &store)
-      : shutting_down(shutting_down), jobs(jobs), workers(workers),
-        store(store) {}
+  WorkerStats() : finished_jobs(0), current_job(std::nullopt) {}
+
+  void job_started(JobId id) { current_job = id; }
+  void job_finished() {
+    current_job = std::nullopt;
+    finished_jobs++;
+  }
+
+  auto get_finished_jobs() const { return finished_jobs; }
+  auto get_current_job() const { return current_job; }
+};
+
+class CoordView {
+  psx::Mutex<bool> shutting_down = false;
+  psx::Mutex<std::vector<Job>> jobs;
+  FileStore store;
+  ThreadPool &workers;
+  std::vector<psx::Mutex<WorkerStats>> worker_stats;
+
+public:
+  CoordView(ThreadPool &workers, std::string_view runpath)
+      : store(runpath), workers(workers), worker_stats(workers.nthreads()) {}
 
   void shutdown() {
     *shutting_down.lock() = true;
@@ -35,6 +52,7 @@ public:
   psx::Lock<std::vector<Job>> get_jobs() { return jobs.lock(); }
 
   ThreadPool &get_worker_pool() { return workers; }
+  auto &get_worker_stats() { return worker_stats; }
   psx::Mutex<std::vector<Job>> &get_job_list() { return jobs; }
   auto &get_store() const { return store; }
 };

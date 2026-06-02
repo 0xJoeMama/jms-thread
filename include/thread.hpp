@@ -107,6 +107,10 @@ public:
     return std::move(t_out);
   }
 
+  unsigned long long thread_id() const {
+    return static_cast<unsigned long long>(*t);
+  }
+
   ~Thread() noexcept {
     if (!t)
       return;
