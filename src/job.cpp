@@ -7,7 +7,7 @@
 using namespace jms;
 
 namespace {
-static std::string make_output_dir(JobId job_id, pid_t pid) {
+inline std::string make_output_dir(JobId job_id, pid_t pid) {
   std::ostringstream os{};
 
   std::time_t time = std::time(nullptr);

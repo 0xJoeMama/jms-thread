@@ -1,4 +1,4 @@
-CXXFLAGS =-O3 -Wall -Werror -Wextra -std=c++17 -pedantic -Iinclude -g3 $(EXTRAFLAGS) -pthread -MMD -MD
+CXXFLAGS =-O3 -Wall -Werror -Wextra -std=c++17 -pedantic -Iinclude $(EXTRAFLAGS) -pthread -MMD -MD -DNDEBUG
 LDLIBS = -lpthread -lstdc++
 LDFLAGS=-pthread
 CXX ?=gcc
@@ -10,6 +10,8 @@ vpath %.cpp tests/
 vpath %.hpp include/
 
 all: $(BINS)
+debug: CXXFLAGS += -UNDEBUG -g3
+debug: all
 
 jms_coord: jms_coord.o thread_pool.o coord_commands.o job.o file_store.o
 jms_console: jms_console.o

@@ -13,11 +13,6 @@ public:
   CommandParseError(const std::string &sv) : std::runtime_error(sv) {}
 };
 
-class CommandExecutionError : public std::runtime_error {
-public:
-  CommandExecutionError(const std::string &sv) : std::runtime_error(sv) {}
-};
-
 class UnknownCommand : public CommandParseError {
 public:
   UnknownCommand(const std::string &cmd)

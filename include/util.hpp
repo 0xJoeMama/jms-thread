@@ -123,6 +123,22 @@ inline std::string format(std::string_view s, T... args) {
 }
 } // namespace sutil
 
+#define info(x)                                                                \
+  do {                                                                         \
+    std::cout << "INFO: " << (x) << std::endl;                                 \
+  } while (0)
+
+#define error(x)                                                               \
+  do {                                                                         \
+    std::cerr << "ERROR: " << (x) << std::endl;                                \
+  } while (0)
+
+#define ensure(x)                                                              \
+  ((x) ? (void)0                                                               \
+       : ((std::cerr << "failed to ensure precondition at " __FILE__ ":"       \
+                     << __LINE__ << ": " << __PRETTY_FUNCTION__ << std::endl),    \
+          abort()))
+
 #ifndef NDEBUG
 #define dbg(x)                                                                 \
   do {                                                                         \
@@ -135,16 +151,6 @@ inline std::string format(std::string_view s, T... args) {
     std::cerr << "WARN: " << (x) << std::endl;                                 \
   } while (0)
 #else
-#define dbg(x)
-#define warn(x)
+#define dbg(x) do {} while(0)
+#define warn(x) do {} while(0)
 #endif
-
-#define info(x)                                                                \
-  do {                                                                         \
-    std::cout << "INFO: " << (x) << std::endl;                                 \
-  } while (0)
-
-#define error(x)                                                               \
-  do {                                                                         \
-    std::cerr << "ERROR: " << (x) << std::endl;                                \
-  } while (0)

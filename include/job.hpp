@@ -21,7 +21,6 @@ namespace chr = std::chrono;
 using Timepoint = chr::time_point<std::chrono::system_clock>;
 
 class Job {
-protected:
   const JobId id;
   const chr::time_point<chr::system_clock> submission_time;
   std::vector<std::string> cmd;
@@ -32,7 +31,7 @@ public:
   Job(JobId id, std::vector<std::string> cmd) noexcept;
   Job(const Job &) noexcept = delete;
   Job(Job &&) noexcept = default;
-  virtual ~Job() = default;
+  ~Job() = default;
 
   Job &operator=(const Job &) = delete;
   Job &operator=(Job &&) = delete;

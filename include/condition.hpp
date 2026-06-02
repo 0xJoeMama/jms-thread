@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cassert>
 #include <pthread.h>
 
 #include "mutex.hpp"
@@ -11,7 +10,7 @@ class Condition {
 
 public:
   Condition() { pthread_cond_init(&cond, nullptr); }
-  ~Condition() noexcept { assert(pthread_cond_destroy(&cond) >= 0); }
+  ~Condition() noexcept { ensure(pthread_cond_destroy(&cond) >= 0); }
   void signal() noexcept { pthread_cond_signal(&cond); }
   void broacast() noexcept { pthread_cond_broadcast(&cond); }
 

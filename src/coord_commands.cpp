@@ -13,7 +13,7 @@
 using namespace jms;
 
 namespace {
-std::string pretty_job_status(const Job &job) {
+inline std::string pretty_job_status(const Job &job) {
   std::string status;
   switch (job.get_status()) {
   case JobStatus::Queued: {
@@ -165,7 +165,8 @@ std::string ShowWorkers::execute(CoordView &view) {
 }
 
 // imposed lock order is:
-// job metadata lock -> shutting_down lock -> thread pool internal lock
+// job metadata lock -> shutting_down lock 
+//                   -> thread pool internal lock
 std::string Shutdown::execute(CoordView &view) {
   auto job_lock = view.get_jobs();
   view.shutdown();

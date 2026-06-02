@@ -46,7 +46,7 @@ struct Fts {
 
 class AlreadyThere {};
 
-void mk_open_dir(const char *path) {
+inline void mk_open_dir(const char *path) {
   DIR *dir = opendir(path);
   if (dir) {
     closedir(dir);

@@ -7,6 +7,7 @@
 
 #include "command.hpp"
 #include "config.hpp"
+#include "fd.hpp"
 #include "file_store.hpp"
 #include "job.hpp"
 #include "mutex.hpp"
@@ -45,7 +46,8 @@ public:
     *shutting_down.lock() = true;
     // notify main thread that the shutting down flag has been changed
     // this will interrupt the accept call
-    assert(sigqueue(getpid(), SIGALRM, {}) >= 0);
+    if (sigqueue(getpid(), SIGTERM, {}) < 0)
+      throw psx::ErrnoException("failed to signal shutdown");
   }
 
   auto &shutdown_flag() { return shutting_down; }

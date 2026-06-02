@@ -1,8 +1,10 @@
 #pragma once
+
 #include <algorithm>
-#include <cassert>
 #include <pthread.h>
 #include <utility>
+
+#include "util.hpp"
 
 namespace psx {
 template <typename T> class Mutex;
@@ -14,7 +16,7 @@ template <typename T> class Lock {
   T *t;
 
   Lock(pthread_mutex_t *mtx, T *t) : mtx(mtx), t(t) {
-    assert(pthread_mutex_lock(mtx) >= 0);
+    ensure(pthread_mutex_lock(mtx) >= 0);
   }
 
   Lock(const Lock &) = delete;
@@ -42,7 +44,7 @@ public:
   ~Lock() noexcept {
     if (!mtx)
       return;
-    assert(pthread_mutex_unlock(mtx) >= 0);
+    ensure(pthread_mutex_unlock(mtx) >= 0);
   }
 };
 
@@ -58,7 +60,7 @@ public:
 
   Lock<T> lock() { return Lock(&mtx, &t); }
 
-  ~Mutex() noexcept { assert(pthread_mutex_destroy(&mtx) >= 0); }
+  ~Mutex() noexcept { ensure(pthread_mutex_destroy(&mtx) >= 0); }
 };
 
 } // namespace psx

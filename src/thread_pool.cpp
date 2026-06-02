@@ -7,7 +7,7 @@ using namespace std;
 using ThreadFunc = ThreadPool::ThreadFunc;
 
 namespace {
-auto extract_task(Mutex<deque<ThreadFunc>> &tasks, Condition &new_task) {
+inline auto extract_task(Mutex<deque<ThreadFunc>> &tasks, Condition &new_task) {
   auto locked =
       new_task.wait_until(tasks.lock(), [](auto &it) { return !it.empty(); });
 
@@ -17,7 +17,7 @@ auto extract_task(Mutex<deque<ThreadFunc>> &tasks, Condition &new_task) {
   return task;
 }
 
-std::vector<Thread<monostate>>
+inline std::vector<Thread<monostate>>
 make_threads(psx::Mutex<deque<ThreadFunc>> &tasks, psx::Condition &new_task,
              size_t nthreads) {
   std::vector<Thread<monostate>> res{};
