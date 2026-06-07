@@ -3,7 +3,7 @@ LDLIBS = -lpthread -lstdc++
 LDFLAGS=-pthread
 CXX ?=gcc
 BINS = jms_coord jms_console
-TESTS=thread_tests thread_pool_tests
+TESTS=thread_tests thread_pool_tests highest_fd
 
 vpath %.cpp src/
 vpath %.cpp tests/

@@ -10,7 +10,7 @@
 #include "util.hpp"
 
 namespace psx {
-class SocketException : public std::exception {
+class SocketException : public ErrnoException {
   std::string msg;
 
 public:
@@ -263,7 +263,8 @@ public:
 
   TcpSocket accept() {
     try {
-      return TcpSocket(OwnedFd(::accept4(fd.get_fd(), nullptr, nullptr, SOCK_CLOEXEC)));
+      return TcpSocket(
+          OwnedFd(::accept4(fd.get_fd(), nullptr, nullptr, SOCK_CLOEXEC)));
     } catch (const ErrnoException &e) {
       throw SocketCreationException(e);
     }

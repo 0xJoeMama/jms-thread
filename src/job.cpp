@@ -20,7 +20,7 @@ inline std::string make_output_dir(JobId job_id, pid_t pid) {
 }
 
 [[noreturn]] void run_command(JobId id, std::vector<std::string> cmd,
-                              const FileStore &store) {
+                              const FileStore &store) noexcept {
   pid_t pid = getpid();
   // first set-up file descriptors
   FileStore root = store.substore(make_output_dir(id, pid));
@@ -30,20 +30,28 @@ inline std::string make_output_dir(JobId job_id, pid_t pid) {
     exit(EXIT_FAILURE);
   }
 
-  if (close(STDOUT_FILENO) < 0) {
-    error(sutil::format("failed to close stdout for process {}", pid));
-    exit(EXIT_FAILURE);
-  }
-
-  if (close(STDERR_FILENO) < 0) {
-    error(sutil::format("failed to close stderr for process {}", pid));
-    exit(EXIT_FAILURE);
-  }
-
   std::string fmt = sutil::concat<'_'>("stdout", id);
-  psx::OwnedFd std_out(open(fmt.c_str(), O_WRONLY | O_CREAT, 0644));
+  {
+    psx::OwnedFd std_out(open(fmt.c_str(), O_WRONLY | O_CREAT, 0644));
+    dbg(sutil::format("STDOUT is {}", std_out.get_fd()));
+    if (dup2(std_out.get_fd(), STDOUT_FILENO) < 0) {
+      error(sutil::format(
+          "failed to set file descriptor for stdout for process {}: {}", pid,
+          strerror(errno)));
+      exit(EXIT_FAILURE);
+    }
+  }
+
   fmt = sutil::concat<'_'>("stderr", id);
-  psx::OwnedFd std_err(open(fmt.c_str(), O_WRONLY | O_CREAT, 0644));
+  {
+    psx::OwnedFd std_err(open(fmt.c_str(), O_WRONLY | O_CREAT, 0644));
+    if (dup2(std_err.get_fd(), STDERR_FILENO) < 0) {
+      error(sutil::format(
+          "failed to set file descriptor for stderr for process {}: {}", pid,
+          strerror(errno)));
+      exit(EXIT_FAILURE);
+    }
+  }
 
   // setup arguments and call into execve
   std::vector<char *> argv;

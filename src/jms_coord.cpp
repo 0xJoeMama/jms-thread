@@ -43,7 +43,7 @@ using namespace jms;
 namespace {
 void nothing_handler(int) {}
 
-inline int run(const CoordConfig &cfg) {
+[[noreturn]] inline int run(const CoordConfig &cfg) {
   auto listener = psx::TcpListener::listen(cfg.get<Port>());
   info(sutil::format("now accepting connections on port {}", cfg.get<Port>()));
 
@@ -124,7 +124,9 @@ inline int run(const CoordConfig &cfg) {
   pool.shutdown();
   pool.join();
 
-  return 0;
+  // call exit to allow client threads to still hold valid references to shared
+  // state instead of returning which would pop that state from the stack
+  std::exit(0);
 }
 } // namespace
 

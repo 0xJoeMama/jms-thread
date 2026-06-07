@@ -6,3 +6,4 @@ jms_coord
 compile_commands.json
 run
 jms_console
+highest_fd

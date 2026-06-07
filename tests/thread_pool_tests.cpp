@@ -5,7 +5,7 @@ int main(void) {
   psx::Mutex<int> m(0);
 
   jms::ThreadPool pool(12);
-  pool.enqueue([]() {
+  pool.enqueue([](auto) {
     while (1)
       ;
 
