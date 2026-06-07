@@ -104,7 +104,7 @@ public:
     T t_out = std::move(*t_res);
     delete t_res;
 
-    return std::move(t_out);
+    return t_out;
   }
 
   unsigned long long thread_id() const {

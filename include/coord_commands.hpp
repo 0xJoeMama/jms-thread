@@ -32,7 +32,7 @@ public:
 };
 
 class CoordView {
-  psx::Mutex<bool> shutting_down = false;
+  psx::Mutex<bool> shutting_down;
   psx::Mutex<std::vector<Job>> jobs;
   FileStore store;
   ThreadPool &workers;
@@ -40,7 +40,8 @@ class CoordView {
 
 public:
   CoordView(ThreadPool &workers, std::string_view runpath)
-      : store(runpath), workers(workers), worker_stats(workers.nthreads()) {}
+      : shutting_down(false), store(runpath), workers(workers),
+        worker_stats(workers.nthreads()) {}
 
   void shutdown() {
     *shutting_down.lock() = true;
